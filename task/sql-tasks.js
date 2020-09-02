@@ -397,7 +397,7 @@ async function task_1_18(db) {
          COUNT(OrderID) AS 'Total Number of Orders'
       FROM Orders
       WHERE YEAR(OrderDate) = '1998'
-      GROUP BY CONCAT(OrderDate)
+      GROUP BY OrderDate
    `);
    return result[0];
 }

@@ -131,8 +131,8 @@ async function task_1_6(db) {
             CategoryName,
             CompanyName AS 'SupplierCompanyName'
         FROM Categories
-        JOIN Products USING(CategoryID)
-        JOIN Suppliers USING(SupplierID)
+        INNER JOIN Products USING(CategoryID)
+        INNER JOIN Suppliers USING(SupplierID)
         ORDER BY ProductName, CompanyName
     `);
     return result[0];
@@ -277,10 +277,17 @@ async function task_1_12(db) {
  */
 async function task_1_13(db) {
     let result = await db.query(`
-        SELECT 
-            COUNT(UnitsInStock) AS TotalOfCurrentProducts,
-            SUM(Discontinued) AS TotalOfDiscontinuedProducts
-        FROM Products
+        SELECT (
+            SELECT
+                COUNT(UnitsInStock)
+            FROM Products
+        ) AS TotalOfCurrentProducts,
+        (
+            SELECT 
+                COUNT(Discontinued)
+            FROM Products
+            WHERE Discontinued = 1
+        ) AS TotalOfDiscontinuedProducts
     `);
     return result[0];
 }
@@ -386,7 +393,7 @@ async function task_1_17(db) {
 async function task_1_18(db) {
    let result = await db.query(`
       SELECT
-         CONCAT(OrderDate) AS OrderDate,
+         DATE_FORMAT(OrderDate, '%Y-%m-%d %T') AS OrderDate,
          COUNT(OrderID) AS 'Total Number of Orders'
       FROM Orders
       WHERE YEAR(OrderDate) = '1998'
@@ -413,8 +420,8 @@ async function task_1_19(db) {
         JOIN Orders USING(CustomerID)
         JOIN OrderDetails USING(OrderID)
         GROUP BY CustomerID
-        HAVING SUM(UnitPrice * Quantity) > 10000
-        ORDER BY SUM(UnitPrice * Quantity) DESC, CustomerID
+        HAVING \`TotalOrdersAmount, $\` > 10000
+        ORDER BY \`TotalOrdersAmount, $\` DESC, CustomerID
     `);
     return result[0];
 }
@@ -471,30 +478,25 @@ async function task_1_21(db) {
  */
 async function task_1_22(db) {
     let result = await db.query(`
-        WITH productInfo AS (
-            SELECT DISTINCT
-                cust.CompanyName,
-                orddt.productID,
-                orddt.UnitPrice,
-                prod.ProductName
-            FROM Customers cust, Orders ord, OrderDetails orddt, Products prod
-            WHERE ord.CustomerID = cust.CustomerID 
-            AND orddt.OrderID = ord.OrderID 
-            AND  prod.productID = orddt.productID
-        ), maxValues AS (
+        SELECT DISTINCT
+            CompanyName,
+            ProductName,
+            maxValues.UnitPrice AS PricePerItem
+        FROM Customers cust
+        INNER JOIN Orders USING(CustomerID)
+        INNER JOIN OrderDetails orddt USING(OrderID)
+        INNER JOIN Products USING(ProductID)
+        INNER JOIN (
             SELECT
-                CompanyName,
-                    MAX(UnitPrice)
-            AS maxPrice
-            FROM productInfo
-            GROUP BY CompanyName
-        )
-        SELECT
-            p.CompanyName,
-            p.ProductName,
-            p.UnitPrice AS PricePerItem
-        FROM productInfo p, maxValues max
-        WHERE p.companyname = max.companyname AND  p.unitprice = max.maxPrice
+                CustomerID,
+                MAX(UnitPrice) AS UnitPrice
+            FROM OrderDetails
+            INNER JOIN Orders USING(OrderID)
+            INNER JOIN Customers USING(CustomerID)
+            GROUP BY CustomerID
+        ) maxValues
+        ON maxValues.CustomerID = cust.CustomerID
+        AND maxValues.UnitPrice = orddt.UnitPrice
         ORDER BY PricePerItem DESC, CompanyName, ProductName
     `);
     return result[0];
